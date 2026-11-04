@@ -54,8 +54,45 @@ try {
     }
     if (-not $ready) { throw 'Cluster did not reach 3 members. Inspect: docker compose logs galera2 galera3' }
 
+    # Cluster membership (size=3) can precede SST completion. Do not stop
+    # the bootstrap node before both joiners report Synced/Primary/Ready.
+    Write-Host 'Waiting for all three nodes to become fully Synced...'
+    $synced = $false
+    for ($attempt = 1; $attempt -le 120; $attempt++) {
+        $synced = $true
+        foreach ($node in @('galera1', 'galera2', 'galera3')) {
+            $state = Get-GaleraStatus -Node $node -RootPassword $rootPassword -VariableName 'wsrep_local_state_comment' -AllowUnavailable
+            $status = Get-GaleraStatus -Node $node -RootPassword $rootPassword -VariableName 'wsrep_cluster_status' -AllowUnavailable
+            $nodeReady = Get-GaleraStatus -Node $node -RootPassword $rootPassword -VariableName 'wsrep_ready' -AllowUnavailable
+            if ($state -ne 'Synced' -or $status -ne 'Primary' -or $nodeReady -ne 'ON') {
+                $synced = $false
+                break
+            }
+        }
+        if ($synced) { break }
+        Start-Sleep -Seconds 2
+    }
+    if (-not $synced) { throw 'All nodes did not become Synced. Inspect: docker compose logs --tail=150 galera1 galera2 galera3' }
+
     Write-Host 'Recreating galera1 without the bootstrap option...'
     Invoke-Compose -Arguments @('up', '-d', '--no-deps', '--force-recreate', 'galera1')
+    # Recreating the first node disables the one-time bootstrap flag, but
+    # joining the already-running primary component may take time.
+    Write-Host 'Waiting for galera1 to rejoin after recreation...'
+    $rejoined = $false
+    for ($attempt = 1; $attempt -le 120; $attempt++) {
+        $state = Get-GaleraStatus -Node 'galera1' -RootPassword $rootPassword -VariableName 'wsrep_local_state_comment' -AllowUnavailable
+        $status = Get-GaleraStatus -Node 'galera1' -RootPassword $rootPassword -VariableName 'wsrep_cluster_status' -AllowUnavailable
+        $nodeReady = Get-GaleraStatus -Node 'galera1' -RootPassword $rootPassword -VariableName 'wsrep_ready' -AllowUnavailable
+        $size = Get-GaleraStatus -Node 'galera1' -RootPassword $rootPassword -VariableName 'wsrep_cluster_size' -AllowUnavailable
+        if ($state -eq 'Synced' -and $status -eq 'Primary' -and $nodeReady -eq 'ON' -and $size -eq '3') {
+            $rejoined = $true
+            break
+        }
+        Start-Sleep -Seconds 2
+    }
+    if (-not $rejoined) { throw 'galera1 did not rejoin as a Synced member. Inspect: docker compose logs --tail=150 galera1 galera2 galera3' }
+
     Write-Host 'Starting ProxySQL...'
     Invoke-Compose -Arguments @('up', '-d', '--no-deps', 'proxysql')
 
