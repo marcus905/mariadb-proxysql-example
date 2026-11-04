@@ -14,11 +14,6 @@ services:
   galera1:
     <<: *galera
     hostname: galera1
-    environment:
-      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-rootpass}
-      MARIADB_DATABASE: labdb
-      MARIADB_USER: labuser
-      MARIADB_PASSWORD: labpass
     volumes:
       - galera1_data:/var/lib/mysql
       - ./galera/galera.cnf:/etc/mysql/mariadb.conf.d/99-galera.cnf:ro
