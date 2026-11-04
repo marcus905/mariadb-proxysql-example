@@ -86,6 +86,23 @@ docker compose down -v
 
 Do not use `up.ps1` to recover a cluster after a full outage. Follow the Galera recovery procedure rather than automatically bootstrapping an arbitrary node.
 
+### Windows line endings (Git for Windows)
+
+The repository's `.gitattributes` forces Unix LF line endings for `.sh` files mounted into Linux containers, regardless of `core.autocrlf`. On an existing Windows checkout created **before** this rule, refresh the working-tree copies in PowerShell:
+
+```powershell
+git pull --ff-only
+git ls-files -- '*.sh' | ForEach-Object { git checkout-index --force -- $_ }
+```
+
+`checkout-index --force` replaces the listed working-tree shell files with the committed versions; **do not run it if you have uncommitted edits to shell scripts**. No Docker volume reset is required for this line-ending problem. Restart the initial deployment only if it never initialized successfully:
+
+```powershell
+.\scripts\up.ps1
+```
+
+If the first failed start created a Galera data volume, the bootstrap script will refuse to reuse it. For a **brand-new disposable lab with no data to preserve**, run `docker compose down -v` before `up.ps1`; never delete volumes containing valuable data.
+
 ## Connect from the Docker host
 
 ```bash
