@@ -1,0 +1,13 @@
+# Keep shell scripts in Unix format even when cloned on Windows.
+*.sh text eol=lf
+
+# SQL and MariaDB / ProxySQL configuration are also consumed in Linux containers.
+*.sql text eol=lf
+*.cnf text eol=lf
+
+# PowerShell supports CRLF and LF. Use CRLF in Windows checkouts.
+*.ps1 text eol=crlf
+
+# Keep project configuration portable.
+*.yaml text eol=lf
+*.yml text eol=lf
