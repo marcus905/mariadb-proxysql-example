@@ -27,7 +27,7 @@ bash scripts/up.sh
 bash scripts/check.sh
 ```
 
-The startup script bootstraps `galera1` as the initial primary component, joins the other two nodes, then recreates `galera1` **without** the bootstrap option before starting ProxySQL. It **refuses to bootstrap if existing Galera volumes are found**, to avoid unsafe split-brain recovery.
+The startup script bootstraps `galera1` as the initial primary component, joins the other two nodes, then recreates `galera1` **without** the bootstrap option before starting ProxySQL and configures its Galera hostgroups via the ProxySQL Admin interface. It **refuses to bootstrap if existing Galera volumes are found**, to avoid unsafe split-brain recovery.
 
 After startup, subsequent container restarts should use `docker compose up -d` only while the existing Galera primary component is healthy. After a full-cluster outage, follow MariaDB's documented Galera recovery procedure (check `grastate.dat`, `safe_to_bootstrap`, and recovered seqno); this lab deliberately does not automate unsafe recovery.
 
