@@ -35,13 +35,38 @@ function Get-GaleraStatus {
     param(
         [Parameter(Mandatory = $true)][string]$Node,
         [Parameter(Mandatory = $true)][string]$RootPassword,
-        [Parameter(Mandatory = $true)][string]$VariableName
+        [Parameter(Mandatory = $true)][string]$VariableName,
+        [switch]$AllowUnavailable
     )
-    $result = & docker compose exec -T -e "MYSQL_PWD=$RootPassword" $Node mariadb -uroot --batch --skip-column-names -e "SHOW GLOBAL STATUS LIKE '$VariableName';" 2>$null
-    if ($LASTEXITCODE -ne 0) { return $null }
-    $text = $result -join "`n"
-    if ($text -match "(?m)^$([regex]::Escape($VariableName))\s+(\S+)\s*$") {
-        return $Matches[1]
+
+    # During bootstrap a database that is not yet ready is expected. During
+    # diagnostics, preserve the CLI error instead of silently returning blanks.
+    # PowerShell 5.1 and 7 handle native stderr slightly differently. Temporarily
+    # use Continue so 2>&1 captures both streams regardless of PowerShell version.
+    $previousErrorAction = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $output = @(& docker compose exec -T -e "MYSQL_PWD=$RootPassword" $Node mariadb -uroot --batch --skip-column-names -e "SHOW GLOBAL STATUS LIKE '$VariableName';" 2>&1)
+        $exitCode = $LASTEXITCODE
     }
-    return $null
+    finally {
+        $ErrorActionPreference = $previousErrorAction
+    }
+
+    if ($exitCode -ne 0) {
+        if ($AllowUnavailable) { return $null }
+        $details = ($output | ForEach-Object { [string]$_ }) -join ' | '
+        throw "MariaDB query failed on $Node (exit $exitCode) for $VariableName. Details: $details"
+    }
+
+    foreach ($line in $output) {
+        $parts = ([string]$line).Trim() -split '\s+', 2
+        if ($parts.Count -eq 2 -and $parts[0] -eq $VariableName) {
+            return $parts[1].Trim()
+        }
+    }
+
+    if ($AllowUnavailable) { return $null }
+    $raw = ($output | ForEach-Object { [string]$_ }) -join ' | '
+    throw "No value returned for $VariableName on $Node. Galera may be disabled or not initialized. Raw response: $raw"
 }
