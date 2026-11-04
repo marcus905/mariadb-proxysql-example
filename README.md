@@ -31,6 +31,61 @@ The startup script bootstraps `galera1` as the initial primary component, joins 
 
 After startup, subsequent container restarts should use `docker compose up -d` only while the existing Galera primary component is healthy. After a full-cluster outage, follow MariaDB's documented Galera recovery procedure (check `grastate.dat`, `safe_to_bootstrap`, and recovered seqno); this lab deliberately does not automate unsafe recovery.
 
+## Windows: Docker Desktop + PowerShell
+
+Run these commands in **PowerShell 5.1 or PowerShell 7** with Docker Desktop running in Linux-container mode. No Git Bash or host-side MariaDB client is required for the first deployment or health checks.
+
+```powershell
+git clone https://github.com/marcus905/mariadb-proxysql-example.git
+Set-Location mariadb-proxysql-example
+Copy-Item .env.example .env
+.\scripts\up.ps1
+.\scripts\check.ps1
+```
+
+If Windows blocks unsigned local scripts, use a **process-only** policy for this terminal (do not change machine-wide policy):
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+The PowerShell files mirror the Bash workflow:
+
+- `scripts/up.ps1`: first deployment **only**, and refuses to bootstrap existing Galera data volumes.
+- `scripts/configure-proxysql.ps1`: applies and persists ProxySQL Galera hostgroups.
+- `scripts/check.ps1`: checks each Galera node, inspects ProxySQL backend status, and tests SQL connectivity through port 6033.
+- `scripts/test-connection.ps1`: test the host-published TCP port and log in via ProxySQL using the local MariaDB CLI, or a **temporary MariaDB Docker client** if no CLI is installed.
+- `scripts/common.ps1`: shared helpers; not intended to be run directly.
+
+To check the port from **another Windows computer** on the LAN, without requiring Docker or a SQL client:
+
+```powershell
+.\scripts\test-connection.ps1 -HostName 192.168.1.50 -Port 6033 -TcpOnly
+```
+
+Replace `192.168.1.50` with the Docker host's LAN IP. `-TcpOnly` proves the TCP listener is reachable, **not** that SQL authentication or routing works. For a full SQL login from the remote Windows computer, install the MariaDB CLI or Docker Desktop and omit `-TcpOnly`:
+
+```powershell
+.\scripts\test-connection.ps1 -HostName 192.168.1.50 -Port 6033
+```
+
+Default demo credentials for the SQL test are `labuser` / `labpass` on `labdb`; override with `-Username`, `-Password`, `-Database` as needed. `-Port` defaults to `PROXYSQL_PORT` from the local `.env` file or 6033. The temporary Docker client uses `host.docker.internal` when connecting to the local Windows Docker host. If Docker Desktop has a custom networking setup, use a host-installed MariaDB client instead.
+
+To stop the containers without deleting database data:
+
+```powershell
+docker compose down
+```
+
+**Destructive lab reset, only if no data must be retained:**
+
+```powershell
+docker compose down -v
+.\scripts\up.ps1
+```
+
+Do not use `up.ps1` to recover a cluster after a full outage. Follow the Galera recovery procedure rather than automatically bootstrapping an arbitrary node.
+
 ## Connect from the Docker host
 
 ```bash
