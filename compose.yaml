@@ -1,0 +1,69 @@
+name: mariadb-galera-proxysql
+
+x-galera: &galera
+  image: mariadb:11.4
+  environment:
+    MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-rootpass}
+  volumes:
+    - ./galera/galera.cnf:/etc/mysql/mariadb.conf.d/99-galera.cnf:ro
+  networks:
+    - cluster
+  restart: "no"
+
+services:
+  galera1:
+    <<: *galera
+    hostname: galera1
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-rootpass}
+      MARIADB_DATABASE: labdb
+      MARIADB_USER: labuser
+      MARIADB_PASSWORD: labpass
+    volumes:
+      - galera1_data:/var/lib/mysql
+      - ./galera/galera.cnf:/etc/mysql/mariadb.conf.d/99-galera.cnf:ro
+      - ./galera/01-monitor.sql:/docker-entrypoint-initdb.d/01-monitor.sql:ro
+      - ./scripts/node1-entrypoint.sh:/opt/lab/node1-entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/opt/lab/node1-entrypoint.sh"]
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-rootpass}
+      MARIADB_DATABASE: labdb
+      MARIADB_USER: labuser
+      MARIADB_PASSWORD: labpass
+      GALERA_BOOTSTRAP: ${GALERA_BOOTSTRAP:-0}
+    command: ["mariadbd", "--wsrep_node_name=galera1", "--wsrep_node_address=galera1"]
+  galera2:
+    <<: *galera
+    hostname: galera2
+    volumes:
+      - galera2_data:/var/lib/mysql
+      - ./galera/galera.cnf:/etc/mysql/mariadb.conf.d/99-galera.cnf:ro
+    command: ["mariadbd", "--wsrep_node_name=galera2", "--wsrep_node_address=galera2"]
+  galera3:
+    <<: *galera
+    hostname: galera3
+    volumes:
+      - galera3_data:/var/lib/mysql
+      - ./galera/galera.cnf:/etc/mysql/mariadb.conf.d/99-galera.cnf:ro
+    command: ["mariadbd", "--wsrep_node_name=galera3", "--wsrep_node_address=galera3"]
+  proxysql:
+    image: proxysql/proxysql:3.0.1
+    hostname: proxysql
+    volumes:
+      - proxysql_data:/var/lib/proxysql
+      - ./proxysql/proxysql.cnf:/etc/proxysql.cnf:ro
+    ports:
+      - "0.0.0.0:${PROXYSQL_PORT:-6033}:6033"
+      - "127.0.0.1:6032:6032"
+    networks:
+      - cluster
+    restart: unless-stopped
+
+networks:
+  cluster:
+
+volumes:
+  galera1_data:
+  galera2_data:
+  galera3_data:
+  proxysql_data:
