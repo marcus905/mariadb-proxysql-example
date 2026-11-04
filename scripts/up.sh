@@ -30,4 +30,5 @@ echo "Removing bootstrap flag from node1's configuration (recreates node1 after 
 GALERA_BOOTSTRAP=0 docker compose up -d --no-deps --force-recreate galera1
 echo "Starting ProxySQL..."
 docker compose up -d --no-deps proxysql
-echo "Run ./scripts/check.sh to verify the cluster."
+bash scripts/configure-proxysql.sh
+echo "Run bash scripts/check.sh to verify the cluster."
