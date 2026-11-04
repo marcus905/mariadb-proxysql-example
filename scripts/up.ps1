@@ -32,7 +32,7 @@ try {
     Write-Host 'Waiting for first node to become ready...'
     $ready = $false
     for ($attempt = 1; $attempt -le 90; $attempt++) {
-        if ((Get-GaleraStatus -Node 'galera1' -RootPassword $rootPassword -VariableName 'wsrep_ready') -eq 'ON') {
+        if ((Get-GaleraStatus -Node 'galera1' -RootPassword $rootPassword -VariableName 'wsrep_ready' -AllowUnavailable) -eq 'ON') {
             $ready = $true
             break
         }
@@ -46,7 +46,7 @@ try {
 
     $ready = $false
     for ($attempt = 1; $attempt -le 120; $attempt++) {
-        if ((Get-GaleraStatus -Node 'galera1' -RootPassword $rootPassword -VariableName 'wsrep_cluster_size') -eq '3') {
+        if ((Get-GaleraStatus -Node 'galera1' -RootPassword $rootPassword -VariableName 'wsrep_cluster_size' -AllowUnavailable) -eq '3') {
             $ready = $true
             break
         }
