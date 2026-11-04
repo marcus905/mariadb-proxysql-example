@@ -143,6 +143,40 @@ mariadb --protocol=tcp -h127.0.0.1 -P6032 -uradmin -pradminpass -e "SELECT hostg
 
 ProxySQL tracks a Galera writer; a simple `SELECT` does **not** necessarily round-robin across all nodes because this lab intentionally defaults to the writer and does not set query-based read/write splitting. ProxySQL's SQLite-backed configuration is persisted in its volume: changing `proxysql.cnf` later may require applying changes in the admin interface or resetting the **disposable** ProxySQL volume.
 
+### Galera shows 3 members but `non-Primary`
+
+A cluster can report `wsrep_cluster_size=3` but still be **unavailable** if
+`wsrep_cluster_status=non-Primary` and `wsrep_ready=OFF`. Membership alone
+does not prove that a Primary Component has been established. Check:
+
+```powershell
+docker compose ps -a
+docker compose logs --tail=150 galera1 galera2 galera3
+```
+
+If logs report `No node with complete state` or `Failed to establish quorum`,
+one likely cause during first deployment is that the bootstrap node was restarted
+before joining peers reached the `Synced` state. The current `up.ps1` and
+`up.sh` explicitly wait for all three peers to become `Synced` before
+recreating the bootstrap node, and wait for it to rejoin before starting ProxySQL.
+
+**Only for a brand-new disposable environment with NO data to preserve:**
+
+```powershell
+git pull --ff-only
+docker compose down -v
+.\scripts\up.ps1
+.\scripts\check.ps1
+```
+
+`down -v` permanently removes the MariaDB and ProxySQL volumes. **Never**
+use this reset for data you need to keep. For non-disposable data, follow
+[MariaDB's quorum-reset and recovery guidance](https://mariadb.com/docs/galera-cluster/high-availability/resetting-the-quorum-cluster-bootstrap):
+verify there is no other Primary Component, compare the last committed
+transaction positions on all available nodes, and recover a **single**
+Primary Component from the most advanced node. Do not issue `pc.bootstrap`
+indiscriminately on an arbitrary node or on multiple partitions.
+
 ## Troubleshooting remote access
 
 1. Check `docker compose ps`: ProxySQL should show `0.0.0.0:6033->6033/tcp`.
